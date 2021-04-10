@@ -16,7 +16,7 @@ namespace TranslationAssistant.Business
     #region
 
     using System;
-    using System.IO;
+    using System.Diagnostics;
 
     using global::TranslationAssistant.AutomationToolkit.BasePlugin;
 
@@ -28,18 +28,23 @@ namespace TranslationAssistant.Business
 
         public static void LogError(string message)
         {
-            var timestamp = DateTime.Now.ToShortDateString() + " " + DateTime.Now.ToLongTimeString() + " : ";
-            var messageToLog = timestamp + message;
-            File.AppendAllText("Log.txt", messageToLog + Environment.NewLine);
-            new ConsoleLogger().WriteLine(LogLevel.Error, messageToLog);
+            WriteMessage(LogLevel.Error, message);
         }
 
         public static void LogMessage(string message)
         {
+            WriteMessage(LogLevel.Msg, message);
+        }
+
+        private static void WriteMessage(LogLevel logLevel, string message)
+        {
             var timestamp = DateTime.Now.ToShortDateString() + " " + DateTime.Now.ToLongTimeString() + " : ";
             var messageToLog = timestamp + message;
-            File.AppendAllText("Log.txt", timestamp + messageToLog + Environment.NewLine);
-            new ConsoleLogger().WriteLine(LogLevel.Msg, messageToLog);
+            Debug.Listeners.Add(new TextWriterTraceListener(Console.Out));
+            Debug.AutoFlush = true;
+            Debug.Indent();
+            Debug.WriteLine(messageToLog, logLevel);
+            Debug.Unindent();
         }
 
         #endregion

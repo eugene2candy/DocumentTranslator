@@ -23,6 +23,9 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
     using TranslationAssistant.DocumentTranslationInterface.Common;
     using FirstFloor.ModernUI.Presentation;
     using FirstFloor.ModernUI.Windows;
+    using System.Windows.Navigation;
+    using System.Threading.Tasks;
+    using TranslationAssistant.TranslationServices.Core;
 
     /// <summary>
     ///     The Main window view model.
@@ -48,9 +51,10 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
         /// </summary>
         public MainWindowViewModel()
         {
-            TranslationAssistant.DocumentTranslationInterface.Properties.DocumentTranslator.Default.Upgrade();
-            TranslationAssistant.DocumentTranslationInterface.Properties.DocumentTranslator.Default.Reload();
-            this.StatusText = string.Empty;
+            Properties.DocumentTranslator.Default.Upgrade();
+            Properties.DocumentTranslator.Default.Reload();
+            StatusText = String.Format("{0}", Properties.Resources.Error_PleaseSubscribe);
+            _ = TranslationServiceFacade.Initialize();
             ShowStatus();
         }
 
@@ -84,16 +88,16 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
 
         #region Methods
 
-        private void ShowStatus()
+        private async void ShowStatus()
         {
 
-            if (TranslationAssistant.TranslationServices.Core.TranslationServiceFacade.IsTranslationServiceReady())
+            if (await TranslationServices.Core.TranslationServiceFacade.IsTranslationServiceReadyAsync())
             {
-                this.StatusText = "Ready to translate.";
+                this.StatusText = Properties.Resources.Common_Ready;
             }
             else
             {
-                this.StatusText = "Please subscribe to Microsoft Translator and enter your client ID and client secret in the Settings page.";
+                this.StatusText = Properties.Resources.Error_PleaseSubscribe;
             }
         }
 

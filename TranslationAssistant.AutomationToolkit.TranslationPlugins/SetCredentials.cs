@@ -14,12 +14,8 @@
 namespace TranslationAssistant.AutomationToolkit.TranslationPlugins
 {
     using System;
-    using System.IO;
-    using System.Linq;
 
     using TranslationAssistant.AutomationToolkit.BasePlugin;
-    using TranslationAssistant.Business;
-    using TranslationAssistant.Business.Model;
     using TranslationAssistant.TranslationServices.Core;
 
     /// <summary>
@@ -32,17 +28,32 @@ namespace TranslationAssistant.AutomationToolkit.TranslationPlugins
         /// <summary>
         ///     The source document.
         /// </summary>
-        private readonly Argument clientID;
-
-        /// <summary>
-        ///     The source language.
-        /// </summary>
-        private readonly Argument clientSecret;
+        private readonly Argument AzureKey;
 
         /// <summary>
         ///     The target language.
         /// </summary>
         private readonly Argument categoryID;
+
+        /// <summary>
+        ///     The Cloud to use.
+        /// </summary>
+        private readonly Argument Cloud;
+
+        /// <summary>
+        ///     The Region to use. The key in the SetCredentials function must match the region. 
+        /// </summary>
+        private readonly Argument Region;
+
+        /// <summary>
+        /// Reset the credentials to default values.
+        /// </summary>
+        private readonly Argument Reset;
+
+        /// <summary>
+        /// Prints the saved credentials
+        /// </summary>
+        private readonly Argument Print;
 
         #endregion
 
@@ -57,23 +68,39 @@ namespace TranslationAssistant.AutomationToolkit.TranslationPlugins
         public SetCredentials(ConsoleLogger Logger)
             : base(Logger)
         {
-            this.clientID = new Argument(
-                "clientID",
-                true,
-                "Client ID to use for the calls to the Translator service.");
-
-            this.clientSecret = new Argument( 
-                "clientSecret",
-                true,
-                "Client secret to use for the calls to the Translator service.");
+            this.AzureKey = new Argument(
+                "APIkey",
+                false,
+                "API key to use for the calls to the Translator service.") ;
 
             this.categoryID = new Argument(
                 "categoryID",
                 false,
-                "Translator Hub category ID to use for calls to the translator service.");
+                "Custom Translator category ID to use for calls to the translator service.");
+
+            this.Cloud = new Argument(
+                "Cloud",
+                false,
+                new string[] { TranslationServiceFacade.AzureCloud },
+                Endpoints.GetClouds(),
+                true,
+                "The cloud you want to use for Translator calls.");
+
+            this.Region = new Argument(
+                "Region",
+                false,
+                new string[] { TranslationServiceFacade.AzureRegion },
+                Endpoints.AvailableRegions.ToArray(),
+                true,
+                "The region of the resource the APIKey is associated with.");
+
+            this.Reset = new Argument(
+                "Reset",
+                false,
+                "Value of 'true' resets the credentials to their default values.");
 
             this.Arguments = new ArgumentList(
-                new[] { this.clientID, this.clientSecret, this.categoryID },
+                new[] { this.AzureKey, this.categoryID, this.Cloud, this.Region, this.Reset},
                 Logger);
         }
 
@@ -88,7 +115,7 @@ namespace TranslationAssistant.AutomationToolkit.TranslationPlugins
         {
             get
             {
-                return "Sets the credentials for use with the Translator service.";
+                return "Sets or resets the credentials for use with the Translator service.";
             }
         }
 
@@ -117,9 +144,11 @@ namespace TranslationAssistant.AutomationToolkit.TranslationPlugins
         {
             try
             {
-                TranslationServiceFacade.ClientID = this.clientID.ValueString;
-                TranslationServiceFacade.ClientSecret = this.clientSecret.ValueString;
-                TranslationServiceFacade.CategoryID = this.categoryID.ValueString;
+                if (!string.IsNullOrEmpty(this.Reset.ValueString)) TranslationServiceFacade.ResetCredentials();
+                if (!string.IsNullOrEmpty(this.AzureKey.ValueString)) TranslationServiceFacade.AzureKey = this.AzureKey.ValueString;
+                if (!string.IsNullOrEmpty(this.categoryID.ValueString)) TranslationServiceFacade.CategoryID = this.categoryID.ValueString;
+                if (!string.IsNullOrEmpty(this.Cloud.ValueString)) TranslationServiceFacade.AzureCloud = this.Cloud.ValueString;
+                if (!string.IsNullOrEmpty(this.Region.ValueString)) TranslationServiceFacade.AzureRegion = this.Region.ValueString;
                 TranslationServiceFacade.SaveCredentials();
             }
             catch (Exception ex)
@@ -130,13 +159,14 @@ namespace TranslationAssistant.AutomationToolkit.TranslationPlugins
             }
 
             this.Logger.WriteLine(LogLevel.Msg, string.Format("Credentials saved."));
+
             if (TranslationServiceFacade.IsTranslationServiceReady())
             {
                 this.Logger.WriteLine(LogLevel.Msg, string.Format("Translator service is ready to use."));
             }
             else
             {
-                this.Logger.WriteLine(LogLevel.Error, string.Format("Credentials are invalid."));
+                this.Logger.WriteLine(LogLevel.Error, string.Format("API Key is invalid. Check that the key is for a resource in this cloud, in this region."));
             }
             return true;
         }

@@ -13,8 +13,8 @@
 
 namespace TranslationAssistant.DocumentTranslationInterface.Content
 {
-    #region
-
+    #region Usings
+    using System;
     using System.Diagnostics;
     using System.Windows.Controls;
     using System.Windows.Navigation;
@@ -22,11 +22,10 @@ namespace TranslationAssistant.DocumentTranslationInterface.Content
     #endregion
 
     /// <summary>
-    ///     Interaction logic for SettingsAppearance.xaml
+    ///     Interaction logic for Account.xaml
     /// </summary>
     public partial class Account : UserControl
     {
-        #region Constructors and Destructors
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="SettingsAppearance" /> class.
@@ -34,6 +33,9 @@ namespace TranslationAssistant.DocumentTranslationInterface.Content
         public Account()
         {
             this.InitializeComponent();
+            KeyBox.Password = TranslationServices.Core.TranslationServiceFacade.AzureKey;
+            CloudSelector.Text = TranslationServices.Core.TranslationServiceFacade.AzureCloud;
+            RegionSelector.Text = TranslationServices.Core.TranslationServiceFacade.AzureRegion;
         }
 
         private void Hyperlink_OnRequestNavigate(object sender, RequestNavigateEventArgs e)
@@ -42,6 +44,26 @@ namespace TranslationAssistant.DocumentTranslationInterface.Content
             e.Handled = true;
         }
 
-        #endregion
+        private void PasswordBox_PasswordChanged(object sender, System.Windows.RoutedEventArgs e)
+        {
+            TranslationServices.Core.TranslationServiceFacade.AzureKey = KeyBox.Password;
+        }
+
+        public event EventHandler ShowExperimental_Changed;
+
+        private void CheckBox_Click(object sender, System.Windows.RoutedEventArgs e)
+        {
+            _ = TranslationServices.Core.TranslationServiceFacade.Initialize(true);
+            ShowExperimental_Changed?.Invoke(this, EventArgs.Empty);
+        }
+        private void CloudSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+        }
+
+        private void RegionSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            TranslationServices.Core.TranslationServiceFacade.AzureRegion = RegionSelector.SelectedItem.ToString();
+        }
+
     }
 }

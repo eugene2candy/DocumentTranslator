@@ -13,14 +13,9 @@
 
 namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
 {
-    using System;
-    using System.Windows;
     using System.Windows.Input;
 
     using Microsoft.Practices.Prism.Commands;
-
-    using TranslationAssistant.Business;
-    using TranslationAssistant.Business.Model;
     using TranslationAssistant.DocumentTranslationInterface.Common;
 
     /// <summary>
@@ -33,18 +28,39 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
         /// <summary>
         ///     The application id.
         /// </summary>
-        private string clientID;
+        private string _AzureKey;
 
-        /// <summary>
-        ///     The client secret.
-        /// </summary>
-        private string clientSecret;
-
+        
         /// <summary>
         ///     The category identifier.
         /// </summary>
         private string categoryID;
 
+        /// <summary>
+        /// The cloud to use 
+        /// </summary>
+        private string azureCloud;
+
+        /// <summary>
+        /// The region to use 
+        /// </summary>
+        private string azureRegion;
+
+        /// <summary>
+        /// Show the experimental languages 
+        /// </summary>
+        private bool showExperimental;
+
+        /// <summary>
+        /// Use the Container 
+        /// </summary>
+        private bool useCustomEndpoint;
+
+        /// <summary>
+        /// Container Url 
+        /// </summary>
+        private string customEndpointUrl;
+        
         /// <summary>
         ///     The save account settings click command.
         /// </summary>
@@ -56,48 +72,27 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
         private string statusText;
 
         #endregion
-
-        #region Constructors and Destructors
-
-
-        #endregion
-
+                
         #region Public Properties
 
         /// <summary>
         ///     Gets or sets the application id.
         /// </summary>
-        public string ClientID
+        public string AzureKey
         {
             get
             {
-                return this.clientID;
+                return this._AzureKey;
             }
 
             set
             {
-                this.clientID = value;
-                this.NotifyPropertyChanged("ClientID");
+                this._AzureKey= value;
+                this.NotifyPropertyChanged("AzureKey");
             }
         }
 
-        /// <summary>
-        ///     Gets or sets the client secret.
-        /// </summary>
-        public string ClientSecret
-        {
-            get
-            {
-                return this.clientSecret;
-            }
-
-            set
-            {
-                this.clientSecret = value;
-                this.NotifyPropertyChanged("ClientSecret");
-            }
-        }
-
+        
         public string CategoryID
         {
             get
@@ -109,6 +104,118 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
             {
                 this.categoryID = value;
                 this.NotifyPropertyChanged("CategoryID");
+            }
+        }
+
+        public string[] AvailableClouds
+        {
+            get
+            {
+                return TranslationAssistant.TranslationServices.Core.Endpoints.GetClouds();
+            }
+
+            set
+            {
+                this.AvailableClouds = value;
+                this.NotifyPropertyChanged("AvailableClouds");
+            }
+        }
+        
+        public string SelectedRegion
+        {
+            get
+            {
+                return TranslationAssistant.TranslationServices.Core.TranslationServiceFacade.AzureRegion;
+            }
+
+            set
+            {
+                this.SelectedRegion = value;
+                this.NotifyPropertyChanged("SelectedRegion");
+            }
+
+        }
+
+        public string[] AvailableRegions
+        {
+            get
+            {
+                return TranslationAssistant.TranslationServices.Core.Endpoints.AvailableRegions.ToArray();
+            }
+
+            set
+            {
+                this.AvailableRegions = value;
+                this.NotifyPropertyChanged("AvailableRegions");
+            }
+        }
+        public bool ShowExperimental
+        {
+            get
+            {
+                return this.showExperimental;
+            }
+
+            set
+            {
+                this.showExperimental = value;
+                this.NotifyPropertyChanged("ShowExperimental");
+            }
+        }
+
+        public string AzureRegion
+        {
+            get
+            {
+                return this.azureRegion;
+            }
+            set
+            {
+                this.azureRegion = value;
+                this.NotifyPropertyChanged("AzureRegion");
+            }
+        }
+
+        public string AzureCloud
+        {
+            get
+            {
+                return this.azureCloud;
+            }
+            set
+            {
+                this.azureCloud = value;
+                this.NotifyPropertyChanged("AzureCloud");
+            }
+        }
+
+
+
+        public bool UseCustomEndpoint
+        {
+            get
+            {
+                return this.useCustomEndpoint;
+            }
+
+            set
+            {
+                this.useCustomEndpoint = value;
+                this.NotifyPropertyChanged("UseCustomEndpoint");
+            }
+        }
+
+        public string CustomEndpointUrl
+        {
+            get
+            {
+                return this.customEndpointUrl.ToString();
+            }
+
+            set
+            {
+                customEndpointUrl = value;
+                NotifyPropertyChanged("CustomEndpointUrl");
             }
         }
 
@@ -150,40 +257,55 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
         public AccountViewModel()
         {
             //Initialize in order to load the credentials.
-            TranslationServices.Core.TranslationServiceFacade.Initialize();
-            this.clientID = TranslationServices.Core.TranslationServiceFacade.ClientID;
-            this.clientSecret = TranslationServices.Core.TranslationServiceFacade.ClientSecret;
+            _ = TranslationServices.Core.TranslationServiceFacade.Initialize();
+            this.AzureKey = TranslationServices.Core.TranslationServiceFacade.AzureKey;
             this.categoryID = TranslationServices.Core.TranslationServiceFacade.CategoryID;
+            this.AzureRegion = TranslationServices.Core.TranslationServiceFacade.AzureRegion;
+            this.AzureCloud = TranslationServices.Core.TranslationServiceFacade.AzureCloud;
+            this.useCustomEndpoint = TranslationServices.Core.TranslationServiceFacade.UseCustomEndpoint;
+            this.customEndpointUrl = TranslationServices.Core.TranslationServiceFacade.CustomEndpointUrl;
+            this.showExperimental = TranslationServices.Core.TranslationServiceFacade.ShowExperimental;
         }
 
         /// <summary>
         ///     Saves the account settings to the settings file for next use.
         /// </summary>
-        private void SaveAccountClick()
+        private async void SaveAccountClick()
         {
             //Set the Account values and save.
-            TranslationServices.Core.TranslationServiceFacade.ClientID = this.clientID;
-            TranslationServices.Core.TranslationServiceFacade.ClientSecret = this.clientSecret;
-            TranslationServices.Core.TranslationServiceFacade.CategoryID = this.categoryID;
+            TranslationServices.Core.TranslationServiceFacade.AzureKey = TranslationServices.Core.TranslationServiceFacade.AzureKey.Trim();
+            TranslationServices.Core.TranslationServiceFacade.CategoryID = this.categoryID.Trim();
+            TranslationServices.Core.TranslationServiceFacade.AzureCloud = this.azureCloud;
+            TranslationServices.Core.TranslationServiceFacade.AzureRegion = this.azureRegion;
+            TranslationServices.Core.TranslationServiceFacade.UseCustomEndpoint = this.useCustomEndpoint;
+            TranslationServices.Core.TranslationServiceFacade.CustomEndpointUrl = this.customEndpointUrl;
+            TranslationServices.Core.TranslationServiceFacade.ShowExperimental = this.showExperimental;
             TranslationServices.Core.TranslationServiceFacade.SaveCredentials();
+            _ = TranslationServices.Core.TranslationServiceFacade.Initialize(true);
 
-            if (TranslationServices.Core.TranslationServiceFacade.IsTranslationServiceReady()) { 
-                this.StatusText = "Settings saved. Ready to translate.";
+            bool isready = false;
+
+            try { isready = await TranslationServices.Core.TranslationServiceFacade.IsTranslationServiceReadyAsync(); }
+            catch { isready = false; }
+
+            if (isready) {
+                this.StatusText = Properties.Resources.Common_SettingsSaved;
                 NotifyPropertyChanged("SettingsSaved");
                 //Need to initialize with new credentials in order to get the language list.
-                TranslationServices.Core.TranslationServiceFacade.Initialize();
                 SingletonEventAggregator.Instance.GetEvent<AccountValidationEvent>().Publish(true);
             }
             else
             {
-                this.StatusText = "Client ID or client secret are invalid.\r\nPlease visit the Azure Marketplace to obtain a subscription.";
+                this.StatusText = Properties.Resources.Error_KeyInvalid;
                 SingletonEventAggregator.Instance.GetEvent<AccountValidationEvent>().Publish(false);
+                return;
             }
-            if (!TranslationServices.Core.TranslationServiceFacade.IsCategoryValid(this.categoryID))
+            if (! await TranslationServices.Core.TranslationServiceFacade.IsCategoryValidAsync(this.categoryID))
             {
-                this.StatusText = "Category is invalid.\r\nPlease visit https://hub.microsofttranslator.com to determine a valid category ID, leave empty, or use one of the standard categories.";
+                StatusText = Properties.Resources.Error_CategoryV3Invalid;
                 SingletonEventAggregator.Instance.GetEvent<AccountValidationEvent>().Publish(false);
             }
+            return;
           
         }
 

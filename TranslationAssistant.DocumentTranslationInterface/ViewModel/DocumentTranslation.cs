@@ -1,15 +1,6 @@
-﻿// // ----------------------------------------------------------------------
-// // <copyright file="DocumentTranslation.cs" company="Microsoft Corporation">
-// // Copyright (c) Microsoft Corporation.
-// // All rights reserved.
-// // THIS CODE AND INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY
-// // KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
-// // IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// // PARTICULAR PURPOSE.
-// // </copyright>
-// // ----------------------------------------------------------------------
-// // <summary>DocumentTranslation.cs</summary>
-// // ----------------------------------------------------------------------
+﻿// ----------------------------------------------------------------------
+// <summary>DocumentTranslation.cs</summary>
+// ----------------------------------------------------------------------
 
 namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
 {
@@ -17,6 +8,7 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
 
     using Microsoft.Practices.Prism.Commands;
     using Microsoft.Win32;
+    using System;
     using System.Collections.Generic;
     using System.ComponentModel;
     using System.Diagnostics;
@@ -67,6 +59,13 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
         private string selectedTargetLanguage;
 
         /// <summary>
+        ///     The selected translate mode.
+        /// </summary>
+        private string selectedTranslateMode;
+
+
+
+        /// <summary>
         ///     The show progress bar.
         /// </summary>
         private bool showProgressBar;
@@ -91,9 +90,19 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
         private string _ReadyToTranslateMessage;
 
         /// <summary>
-        ///     The target language list.
+        /// The target language list.
         /// </summary>
         private List<string> targetLanguageList = new List<string>();
+
+        /// <summary>
+        /// The TranslateMode list.
+        /// </summary>
+        private List<string> translateModeList = new List<string>();
+
+        /// <summary>
+        /// Whether to ignore hidden content in translation, or not
+        /// </summary>
+        private bool ignoreHiddenContent = false;
 
         #endregion
 
@@ -104,23 +113,40 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
         /// </summary>
         public DocumentTranslation()
         {
-            TranslationServiceFacade.Initialize();
+            _ = TranslationServiceFacade.Initialize();
             this.PopulateAvailableLanguages();
+            this.PopulateTranslateMode();
             this.ShowProgressBar = false;
             this.IsGoButtonEnabled = false;
             this.TargetFolder = string.Empty;
             this.SelectedTargetLanguage = string.Empty;
-            this.SelectedSourceLanguage = TranslationAssistant.DocumentTranslationInterface.Properties.DocumentTranslator.Default.DefaultSourceLanguage;
-            this.SelectedTargetLanguage = TranslationAssistant.DocumentTranslationInterface.Properties.DocumentTranslator.Default.DefaultTargetLanguage;
+            this.SelectedSourceLanguage = Properties.DocumentTranslator.Default.DefaultSourceLanguage;
+            this.SelectedTargetLanguage = Properties.DocumentTranslator.Default.DefaultTargetLanguage;
+            this.SelectedTranslateMode =  TranslateModeList[Properties.DocumentTranslator.Default.DefaultTranslateMode];  //0=plain text, 1=HTML
+            this.IgnoreHiddenContent = Properties.DocumentTranslator.Default.IgnoreHiddenContent;
             this.StatusText = string.Empty;
             if (TranslationServiceFacade.IsTranslationServiceReady())
             {
-                this.StatusText = "Please select the documents and languages to translate.";
+                this.StatusText = Properties.Resources.Common_SelectDocuments;
+                this.PopulateReadyToTranslateMessage(true);
             }
-            this.PopulateReadyToTranslateMessage(TranslationServiceFacade.IsTranslationServiceReady());
+            ShowStatus();
+            
 
             SingletonEventAggregator.Instance.GetEvent<AccountValidationEvent>().Unsubscribe(PopulateReadyToTranslateMessage);
             SingletonEventAggregator.Instance.GetEvent<AccountValidationEvent>().Subscribe(PopulateReadyToTranslateMessage);
+        }
+
+        /// <summary>
+        /// Save the selected source and target languages for the next session;
+        /// </summary>
+        public void SaveSettings()
+        {
+            Properties.DocumentTranslator.Default.DefaultSourceLanguage = this.SelectedSourceLanguage;
+            Properties.DocumentTranslator.Default.DefaultTargetLanguage = this.SelectedTargetLanguage;
+            Properties.DocumentTranslator.Default.IgnoreHiddenContent = this.IgnoreHiddenContent;
+            Properties.DocumentTranslator.Default.DefaultTranslateMode = TranslateModeList.IndexOf(SelectedTranslateMode);  //0=plain text, 1=HTML
+            Properties.DocumentTranslator.Default.Save();
         }
 
         #endregion
@@ -139,7 +165,7 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
                         {
                             this.ShowProgressBar = true;
                             this.IsGoButtonEnabled = false;
-                            this.StatusText = "Started";
+                            this.StatusText = Properties.Resources.Common_Started;
 
 
                             var worker = new BackgroundWorker();
@@ -158,12 +184,13 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
                                         this.TargetFolder = Path.GetDirectoryName(file);
                                         this.IsNavigateToTargetFolderEnabled = true;
                                         model.TargetPath = file;
-                                        this.StatusText = "Translating document: " + Path.GetFileName(model.TargetPath);
+                                        this.StatusText = Properties.Resources.Common_TranslatingDocument + " " + Path.GetFileName(model.TargetPath);
                                         DocumentTranslationManager.DoTranslation(
                                             file,
                                             false,
                                             this.SelectedSourceLanguage,
-                                            this.SelectedTargetLanguage);
+                                            this.SelectedTargetLanguage,
+                                            this.IgnoreHiddenContent);
                                     }
                                 };
 
@@ -171,21 +198,18 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
                                 {
                                     if (e.Error != null)
                                     {
-                                        this.StatusText = "Error while processing document: " + model.TargetPath + " "
+                                        StatusText = Properties.Resources.Error_ProcessingDocument + " " + model.TargetPath + " "
                                                           + e.Error.Message;
                                     }
                                     else
                                     {
-                                        this.StatusText = "Translation completed successfully.\r\nThe translated documents contain the language identifier \"."+TranslationServiceFacade.LanguageNameToLanguageCode(this.SelectedTargetLanguage)+".\" in the file name.";
+                                        StatusText = Properties.Resources.Common_Statustext1 + "\"."+TranslationServiceFacade.LanguageNameToLanguageCode(this.SelectedTargetLanguage)+".\"" + Properties.Resources.Common_Statustext2;
                                     }
 
                                     this.IsStarted = false;
                                     this.IsGoButtonEnabled = true;
                                     this.ShowProgressBar = false;
-                                    //Save the selected source and target languages for the next session;
-                                    TranslationAssistant.DocumentTranslationInterface.Properties.DocumentTranslator.Default.DefaultSourceLanguage = this.SelectedSourceLanguage;
-                                    TranslationAssistant.DocumentTranslationInterface.Properties.DocumentTranslator.Default.DefaultTargetLanguage = this.SelectedTargetLanguage;
-                                    TranslationAssistant.DocumentTranslationInterface.Properties.DocumentTranslator.Default.Save();
+                                    SaveSettings();
                                 };
                             worker.WorkerReportsProgress = false;
                             worker.RunWorkerAsync();
@@ -307,6 +331,25 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
         }
 
         /// <summary>
+        ///     Gets or sets the selected target language.
+        /// </summary>
+        public string SelectedTranslateMode
+        {
+            get
+            {
+                return this.selectedTranslateMode;
+            }
+
+            set
+            {
+                this.selectedTranslateMode = value;
+                this.NotifyPropertyChanged("SelectedTranslateMode");
+            }
+        }
+
+
+
+        /// <summary>
         ///     Gets or sets a value indicating whether show progress bar.
         /// </summary>
         public bool ShowProgressBar
@@ -407,6 +450,43 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
             }
         }
 
+        /// <summary>
+        ///     Gets or sets the TranslateMode list.
+        /// </summary>
+        public List<string> TranslateModeList
+        {
+            get
+            {
+                return this.translateModeList;
+            }
+
+            set
+            {
+                this.translateModeList = value;
+                this.NotifyPropertyChanged("TranslateModeList");
+            }
+        }
+
+
+
+
+
+        /// <summary>
+        /// Gets or sets a value indicating whether hidden content should be ignored.
+        /// </summary>
+        public bool IgnoreHiddenContent
+        {
+            get
+            {
+                return this.ignoreHiddenContent;
+            }
+            set
+            {
+                this.ignoreHiddenContent = value;
+                this.NotifyPropertyChanged("IgnoreHiddenContent");
+            }
+        }
+
         #endregion
 
         #region Methods
@@ -418,8 +498,7 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
         {
             var openfileDlg = new OpenFileDialog
                                   {
-                                      Filter =
-                                          "Supported Files|*.doc; *.docx; *.pdf; *.xls; *.xlsx; *.ppt; *.pptx; *.txt; *.text; *.htm; *.html; *.srt",      //Add XLF file types here
+                                      Filter = $"{Properties.Resources.Common_SupportedFiles}|*.doc; *.docx; *.pdf; *.xls; *.xlsx; *.ppt; *.pptx; *.txt; *.text; *.htm; *.html; *.srt; *.vtt; *.webvtt; *.md; *.markdown",      //Add XLF file types here
                                       Multiselect = true
                                   };
             if (openfileDlg.ShowDialog().Value)
@@ -440,24 +519,35 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
         /// <summary>
         ///     Populate available source and target languages.
         /// </summary>
-        private void PopulateAvailableLanguages()
+        public void PopulateAvailableLanguages()
         {
-            this.SourceLanguageList.Clear();
-            this.TargetLanguageList.Clear();
-            this.SourceLanguageList.Add("Auto-Detect");
+            this.sourceLanguageList.Clear();
+            this.targetLanguageList.Clear();
+            if (!TranslationServiceFacade.UseCustomEndpoint) this.sourceLanguageList.Add(Properties.Resources.Common_AutoDetect);
             try
             {
-                this.TargetLanguageList.AddRange(TranslationServiceFacade.AvailableLanguages.Values);
+                lock (TranslationServiceFacade.AvailableLanguages)
+                {
+                    this.targetLanguageList.AddRange(TranslationServiceFacade.AvailableLanguages.Values);
+                }
             }
-            catch {
-                this.StatusText = "Unable to retrieve language list from Translator service.";
+            catch (Exception ex) {
+                this.StatusText = String.Format("{0}\n{1}", Properties.Resources.Error_LanguageList, ex.Message);
                 this.NotifyPropertyChanged("StatusText");
                 return;
             };
-            this.TargetLanguageList.Sort();
-            this.SourceLanguageList.AddRange(this.TargetLanguageList);
+            this.targetLanguageList.Sort();
+            this.sourceLanguageList.AddRange(this.targetLanguageList);
             this.NotifyPropertyChanged("SourceLanguageList");
             this.NotifyPropertyChanged("TargetLanguageList");
+            Debug.WriteLine("DocumentTranslation.cs: targetLanguageList.Count: {0}", targetLanguageList.Count);
+        }
+
+        private void PopulateTranslateMode()
+        {
+            this.TranslateModeList.Clear();
+            this.TranslateModeList.Add(Properties.Resources.Common_PlainText);
+            this.TranslateModeList.Add(Properties.Resources.Common_HTML);
         }
 
 
@@ -469,14 +559,28 @@ namespace TranslationAssistant.DocumentTranslationInterface.ViewModel
             //if (TranslationServiceFacade.IsTranslationServiceReady())
             if (successful)
             {
-                this.ReadyToTranslateMessage = "";
+                ReadyToTranslateMessage = "";
                 PopulateAvailableLanguages();
             }
             else
             {
-                this.ReadyToTranslateMessage = "Invalid credentials.\r\nPlease visit the Settings page first to enter your Microsoft Translator credentials.";
+                ReadyToTranslateMessage =  Properties.Resources.Translate_invalidcredentials;
             }
         }
+
+        private async void ShowStatus()
+        {
+
+            if (await TranslationServices.Core.TranslationServiceFacade.IsTranslationServiceReadyAsync())
+            {
+                this.StatusText = Properties.Resources.Common_Ready;
+            }
+            else
+            {
+                this.StatusText = Properties.Resources.Error_PleaseSubscribe;
+            }
+        }
+
 
         #endregion
     }

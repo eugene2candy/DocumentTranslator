@@ -11,19 +11,14 @@ namespace TranslationAssistant.TranslationServices.Core
     /// </summary>
     public class TranslationMemory : IEnumerable<TranslationUnit>
     {
-        private List<TranslationUnit> _TranslationUnits = new List<TranslationUnit>();
         private string _sourceLangID = string.Empty;
         private string _targetLangID = string.Empty;
+        private List<TranslationUnit> translationUnits = new List<TranslationUnit>();
 
-        public List<TranslationUnit> TranslationUnits
-        {
-            get { return _TranslationUnits; }
-            set { _TranslationUnits = value; }
-        }
-        
+        public List<TranslationUnit> TranslationUnits { get => translationUnits; set => translationUnits = value; }
         public string sourceLangID
         {
-            get {return _sourceLangID;}
+            get { return _sourceLangID; }
             set { _sourceLangID = value; }
         }
 
@@ -31,6 +26,11 @@ namespace TranslationAssistant.TranslationServices.Core
         {
             get { return _targetLangID; }
             set { _targetLangID = value; }
+        }
+
+        public int Count
+        {
+            get { return TranslationUnits.Count; }
         }
 
 
@@ -49,7 +49,7 @@ namespace TranslationAssistant.TranslationServices.Core
         {
             using (Mts.Common.Tmx.TmxWriter Tmx = new Mts.Common.Tmx.TmxWriter(filename, sourceLangID, targetLangID, true))
             {
-                foreach (TranslationUnit TU in this._TranslationUnits)
+                foreach (TranslationUnit TU in this.TranslationUnits)
                 {
                     Tmx.TmxWriteSegment(TU.strSource, TU.strTarget, sourceLangID, targetLangID, Mts.Common.Tmx.TmxWriter.TUError.good);
                 }
@@ -63,15 +63,23 @@ namespace TranslationAssistant.TranslationServices.Core
         /// <param name="TU"></param>
         public void Add(TranslationUnit TU)
         {
-            this._TranslationUnits.Add(TU);
+            this.TranslationUnits.Add(TU);
         }
 
         public IEnumerator<TranslationUnit> GetEnumerator()
         {
-            foreach (TranslationUnit TU in _TranslationUnits)
+            foreach (TranslationUnit TU in TranslationUnits)
             {
                 yield return TU;
             }
+        }
+
+        public static TranslationMemory Take(int fromindex, int toindex)
+        {
+            TranslationMemory TM = new TranslationMemory();
+
+            //TODO: Take implementation goes here.
+            return TM;
         }
 
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()

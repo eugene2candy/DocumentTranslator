@@ -27,13 +27,13 @@ namespace TranslationAssistant.Business
 
     using DocumentFormat.OpenXml.Packaging;
     using DocumentFormat.OpenXml.Spreadsheet;
-
+    using DocumentFormat.OpenXml.Wordprocessing;
     using Microsoft.Office.Core;
     using Microsoft.Office.Interop.Word;
-
     using TranslationAssistant.TranslationServices.Core;
 
     using Comment = DocumentFormat.OpenXml.Spreadsheet.Comment;
+    using Footnote = DocumentFormat.OpenXml.Wordprocessing.Footnote;
 
     #endregion
 
@@ -54,10 +54,10 @@ namespace TranslationAssistant.Business
         /// <param name="isDir">The is dir.</param>
         /// <param name="sourceLanguage">The source language.</param>
         /// <param name="targetLanguage">The target langauge.</param>
-        public static void DoTranslation(string path, bool isDir, string sourceLanguage, string targetLanguage)
+        public static void DoTranslation(string path, bool isDir, string sourceLanguage, string targetLanguage, bool ignoreHidden = false)
         {
             GetAllDocumentsToProcess(path, targetLanguage)
-                .ForEach(t => DoTranslationInternal(t, sourceLanguage, targetLanguage));
+                .ForEach(t => DoTranslationInternal(t, sourceLanguage, targetLanguage, ignoreHidden));
         }
 
         #endregion
@@ -94,18 +94,22 @@ namespace TranslationAssistant.Business
         /// </returns>
         private static string ConvertToDocx(string fullPath, string targetLanguage)
         {
-            LoggingManager.LogMessage("Converting the document from doc or pdf to docx.");
+            LoggingManager.LogMessage("Converting the document " + fullPath + " from doc or pdf to docx.");
             object nullvalue = Type.Missing;
-            CloseProcess("WINWORD");
+
+            //Microsoft.Office.Interop.Word.Application wordApp = (Microsoft.Office.Interop.Word.Application) 
+            //Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("000209FF-0000-0000-C000-000000000046")));
             Microsoft.Office.Interop.Word.Application wordApp =
-                (Microsoft.Office.Interop.Word.Application)
-                Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("000209FF-0000-0000-C000-000000000046")));
+                new Microsoft.Office.Interop.Word.Application
+                {
+                    Visible = false
+                };
             object file2 = GetOutputDocumentFullName(fullPath, targetLanguage);
             try
             {
                 wordApp.Visible = false;
                 object filee = fullPath;
-                Document wordDoc = wordApp.Documents.Open(
+                Microsoft.Office.Interop.Word.Document wordDoc = wordApp.Documents.Open(
                     ref filee,
                     nullvalue,
                     Missing.Value,
@@ -151,10 +155,9 @@ namespace TranslationAssistant.Business
             {
                 // wordApp.Documents.Close(ref nullvalue, ref nullvalue, ref nullvalue);
                 wordApp.Quit(ref nullvalue, ref nullvalue, ref nullvalue);
-                CloseProcess("WINWORD");
             }
 
-            LoggingManager.LogMessage("Converted the document from doc or pdf to docx.");
+            LoggingManager.LogMessage("Converted the document " + fullPath + " from doc or pdf to docx.");
             return file2.ToString();
         }
 
@@ -168,15 +171,14 @@ namespace TranslationAssistant.Business
         /// </returns>
         private static string ConvertToPptx(string fullPath, string targetLanguage)
         {
-            LoggingManager.LogMessage("Converting the document from ppt to pptx.");
-
-            CloseProcess("POWERPNT");
+            LoggingManager.LogMessage("Converting the document " + fullPath + " from ppt to pptx.");
+            
             object file2 = GetOutputDocumentFullName(fullPath, targetLanguage);
+            Microsoft.Office.Interop.PowerPoint.Application powerPointApp =
+                new Microsoft.Office.Interop.PowerPoint.Application();
+
             try
             {
-                Microsoft.Office.Interop.PowerPoint.Application powerPointApp =
-                    new Microsoft.Office.Interop.PowerPoint.Application();
-
                 Microsoft.Office.Interop.PowerPoint.Presentation presentation =
                     powerPointApp.Presentations.Open(
                         fullPath,
@@ -192,10 +194,10 @@ namespace TranslationAssistant.Business
             }
             finally
             {
-                CloseProcess("POWERPNT");
+                powerPointApp.Quit();
             }
 
-            LoggingManager.LogMessage("Converted the document from ppt to pptx.");
+            LoggingManager.LogMessage("Converted the document " + fullPath + " from ppt to pptx.");
             return file2.ToString();
         }
 
@@ -209,15 +211,15 @@ namespace TranslationAssistant.Business
         /// </returns>
         private static string ConvertToXlsx(string fullPath, string targetLanguage)
         {
-            LoggingManager.LogMessage("Converting the document from xls to xlsx.");
-            CloseProcess("EXCEL");
+            LoggingManager.LogMessage("Converting the document " + fullPath + " from xls to xlsx.");
+            
             object file2 = GetOutputDocumentFullName(fullPath, targetLanguage);
-            try
-            {
                 Microsoft.Office.Interop.Excel.Application excelApp = new Microsoft.Office.Interop.Excel.Application
                                                                           {
                                                                               Visible = false
                                                                           };
+            try
+            {
 
                 Microsoft.Office.Interop.Excel.Workbook eWorkbook = excelApp.Workbooks.Open(
                     fullPath,
@@ -254,10 +256,10 @@ namespace TranslationAssistant.Business
             }
             finally
             {
-                CloseProcess("EXCEL");
+                excelApp.Quit();
             }
 
-            LoggingManager.LogMessage("Converted the document from xls to xlsx.");
+            LoggingManager.LogMessage("Converted the document " + fullPath + " from xls to xlsx.");
             return file2.ToString();
         }
 
@@ -270,21 +272,22 @@ namespace TranslationAssistant.Business
         private static void DoTranslationInternal(
             string fullNameForDocumentToProcess,
             string sourceLanguage,
-            string targetLanguage)
+            string targetLanguage,
+            bool ignoreHidden = false)
         {
             try
             {
                 if (fullNameForDocumentToProcess.ToLowerInvariant().EndsWith(".docx"))
                 {
-                    ProcessWordDocument(fullNameForDocumentToProcess, sourceLanguage, targetLanguage);
+                    ProcessWordDocument(fullNameForDocumentToProcess, sourceLanguage, targetLanguage, ignoreHidden);
                 }
                 else if (fullNameForDocumentToProcess.ToLowerInvariant().EndsWith(".xlsx"))
                 {
-                    ProcessExcelDocument(fullNameForDocumentToProcess, sourceLanguage, targetLanguage);
+                    ProcessExcelDocument(fullNameForDocumentToProcess, sourceLanguage, targetLanguage, ignoreHidden);
                 }
                 else if (fullNameForDocumentToProcess.ToLowerInvariant().EndsWith(".pptx"))
                 {
-                    ProcessPowerPointDocument(fullNameForDocumentToProcess, sourceLanguage, targetLanguage);
+                    ProcessPowerPointDocument(fullNameForDocumentToProcess, sourceLanguage, targetLanguage, ignoreHidden);
                 }
                 else if (fullNameForDocumentToProcess.ToLowerInvariant().EndsWith(".txt") || fullNameForDocumentToProcess.ToLowerInvariant().EndsWith(".text"))
                 {
@@ -292,11 +295,21 @@ namespace TranslationAssistant.Business
                 }
                 else if (fullNameForDocumentToProcess.ToLowerInvariant().EndsWith(".html") || fullNameForDocumentToProcess.ToLowerInvariant().EndsWith(".htm"))
                 {
-                    ProcessHTMLDocument(fullNameForDocumentToProcess, sourceLanguage, targetLanguage);
+                    HTMLTranslationManager.DoTranslation(fullNameForDocumentToProcess, sourceLanguage, targetLanguage);
                 }
                 else if (fullNameForDocumentToProcess.ToLowerInvariant().EndsWith(".srt"))
                 {
-                    ProcessSRTDocument(fullNameForDocumentToProcess, sourceLanguage, targetLanguage);
+                    VTTTranslate vTTTranslate = new VTTTranslate(fullNameForDocumentToProcess, sourceLanguage, VTTTranslate.Filetype.srt);
+                    _ = vTTTranslate.Translate(TranslationServiceFacade.LanguageNameToLanguageCode(targetLanguage)).Result;
+                }
+                else if (fullNameForDocumentToProcess.ToLowerInvariant().EndsWith(".md") || fullNameForDocumentToProcess.ToLowerInvariant().EndsWith(".markdown"))
+                {
+                    MDTranslationManager.DoTranslation(fullNameForDocumentToProcess, sourceLanguage, targetLanguage);
+                }
+                else if (fullNameForDocumentToProcess.ToLowerInvariant().EndsWith(".vtt") || fullNameForDocumentToProcess.ToLowerInvariant().EndsWith(".webvtt"))
+                {
+                    VTTTranslate vTTTranslate = new VTTTranslate(fullNameForDocumentToProcess, sourceLanguage);
+                    _ = vTTTranslate.Translate(TranslationServiceFacade.LanguageNameToLanguageCode(targetLanguage)).Result;
                 }
             }
             catch (AggregateException ae)
@@ -348,6 +361,7 @@ namespace TranslationAssistant.Business
             else
             {
                 File.Copy(documentPath, outputDocumentName);
+                File.SetAttributes(outputDocumentName, FileAttributes.Normal);
                 allFiles.Add(outputDocumentName);
             }
 
@@ -390,16 +404,6 @@ namespace TranslationAssistant.Business
         }
 
 
-        private static void ProcessHTMLDocument(string fullNameForDocumentToProcess, string sourceLanguage, string targetLanguage)
-        {
-            HTMLTranslationManager.DoTranslation(fullNameForDocumentToProcess, sourceLanguage, targetLanguage);
-        }
-
-        private static void ProcessSRTDocument(string fullNameForDocumentToProcess, string sourceLanguage, string targetLanguage)
-        {
-            SRTTranslationManager.DoTranslation(fullNameForDocumentToProcess, sourceLanguage, targetLanguage);
-        }
-
 
         /// <summary>
         /// Translates a plain text document in UTF8 encoding to the target language.
@@ -411,7 +415,7 @@ namespace TranslationAssistant.Business
         {
             var document = File.ReadAllLines(fullNameForDocumentToProcess, Encoding.UTF8);
             List<string> lstTexts = new List<string>(document);
-            var batches = SplitList(lstTexts, 99, 9000);
+            var batches = SplitList(lstTexts, TranslationServiceFacade.Maxelements, TranslationServiceFacade.Maxrequestsize);
             File.Delete(fullNameForDocumentToProcess);
 
             foreach (var batch in batches)
@@ -423,44 +427,12 @@ namespace TranslationAssistant.Business
             return;
         }
 
-        /// <summary>
-        /// Create a CSV file with the aligment information as the third column. Original in 1st, translation in 2nd and alignment in 3rd column.
-        /// Source document must be UTF-8 encoded text file. 
-        /// </summary>
-        /// <param name="fullNameForDocumentToProcess">Source document name</param>
-        /// <param name="sourceLanguage">From language</param>
-        /// <param name="targetLanguage">To language</param>
-        public static void CreateAlignmentCSV(string fullNameForDocumentToProcess, string sourceLanguage, string targetLanguage)
-        {
-            var document = File.ReadAllLines(fullNameForDocumentToProcess, Encoding.UTF8);
-            List<string> lstTexts = new List<string>(document);
-            var batches = SplitList(lstTexts, 99, 9000);
-            var textfile = File.CreateText(fullNameForDocumentToProcess + "." + TranslationServiceFacade.LanguageNameToLanguageCode(targetLanguage) + ".csv");
-            textfile.WriteLine("\"{0}\",\"{1}\",\"{2}\"", TranslationServiceFacade.LanguageNameToLanguageCode(sourceLanguage).ToUpperInvariant(),
-                                                          TranslationServiceFacade.LanguageNameToLanguageCode(targetLanguage).ToUpperInvariant(),
-                                                          "Word Alignment");
-
-            foreach (var batch in batches)
-            {
-                string[] alignments = null;
-                string[] translated = TranslationServiceFacade.GetAlignments(batch.ToArray(), sourceLanguage, targetLanguage, ref alignments);
-
-                for (int i=0; i<batch.Count(); i++)
-                {
-                    textfile.WriteLine("\"{0}\",\"{1}\",\"{2}\"", batch[i].Replace("\"", "\"\""), translated[i].Replace("\"", "\"\""), alignments[i]);
-                }
-
-            }
-            textfile.Close();
-            return;
-        }
-
-
 
         private static void ProcessExcelDocument(
             string outputDocumentFullName,
             string sourceLanguage,
-            string targetLanguage)
+            string targetLanguage,
+            bool ignoreHidden = false)
         {
             using (SpreadsheetDocument document = SpreadsheetDocument.Open(outputDocumentFullName, true))
             {
@@ -474,14 +446,14 @@ namespace TranslationAssistant.Business
                     }
                     else if (si != null)
                     {
-                        lstTexts.AddRange(si.Elements<Run>().Where(item => (item != null && item.Text != null && !String.IsNullOrEmpty(item.Text.Text))).Select(item => item.Text));
+                        lstTexts.AddRange(si.Elements<DocumentFormat.OpenXml.Spreadsheet.Run>().Where(item => (item != null && item.Text != null && !String.IsNullOrEmpty(item.Text.Text))).Select(item => item.Text));
                     }
                 }
 
                 var batch = lstTexts.Select(item => item.Text);
                 IEnumerable<string> values = batch as string[] ?? batch.ToArray();
 
-                var batches = SplitList(values, 99, 9000);
+                var batches = SplitList(values, TranslationServiceFacade.Maxelements, TranslationServiceFacade.Maxrequestsize);
                 string[] translated = new string[values.Count()];
 
                 var exceptions = new ConcurrentQueue<Exception>();
@@ -544,7 +516,7 @@ namespace TranslationAssistant.Business
                 }
 
                 var batchComments = lstComments.Select(item => item.InnerText);
-                var batchesComments = SplitList(batchComments, 99, 9000);
+                var batchesComments = SplitList(batchComments, TranslationServiceFacade.Maxelements, TranslationServiceFacade.Maxrequestsize);
                 string[] translatedComments = new string[batchesComments.Count()];
 
                 Parallel.For(
@@ -601,15 +573,16 @@ namespace TranslationAssistant.Business
             }
         }
 
-        private static void ProcessPowerPointDocument(string outputDocumentFullName,string sourceLanguage,string targetLanguage)
+        private static void ProcessPowerPointDocument(string outputDocumentFullName,string sourceLanguage,string targetLanguage, bool ignoreHidden = false)
         {
             using (PresentationDocument doc = PresentationDocument.Open(outputDocumentFullName, true))
             {
                 //doc.PresentationPart.PutXDocument();
 
                 List<DocumentFormat.OpenXml.Drawing.Text> texts = new List<DocumentFormat.OpenXml.Drawing.Text>();
+                List<DocumentFormat.OpenXml.Drawing.Text> notes = new List<DocumentFormat.OpenXml.Drawing.Text>();
                 List<DocumentFormat.OpenXml.Presentation.Comment> lstComments = new List<DocumentFormat.OpenXml.Presentation.Comment>();
-
+           
                 var slideParts = doc.PresentationPart.SlideParts;
                 if (slideParts != null)
                 {
@@ -617,44 +590,55 @@ namespace TranslationAssistant.Business
                     {
                         if (slidePart.Slide != null)
                         {
-                            foreach (DocumentFormat.OpenXml.Drawing.Paragraph para in slidePart.Slide.Descendants<DocumentFormat.OpenXml.Drawing.Paragraph>())
-                            {
-                                texts.AddRange(para.Elements<DocumentFormat.OpenXml.Drawing.Run>().Where(item => (item != null && item.Text != null && !String.IsNullOrEmpty(item.Text.Text))).Select(item => item.Text));
-                            }
+                            var slide = slidePart.Slide;
+                            ExtractTextContent(texts, slide);
 
                             var commentsPart = slidePart.SlideCommentsPart;
                             if (commentsPart != null)
                             {
                                 lstComments.AddRange(commentsPart.CommentList.Cast<DocumentFormat.OpenXml.Presentation.Comment>());
                             }
+
+                            var notesPart = slidePart.NotesSlidePart;
+                            if (notesPart != null)
+                            {
+                                ExtractTextContent(notes, notesPart.NotesSlide);
+                            }
                         }
                     }
 
-                    if (texts.Count() > 0)
+                    ReplaceTextsWithTranslation(texts, sourceLanguage, targetLanguage);
+                    ReplaceTextsWithTranslation(notes, sourceLanguage, targetLanguage);
+
+                    if (lstComments.Count() > 0)
                     {
                         // Extract Text for Translation
-                        var batch = texts.Select(text => text.Text);
+                        var batch = lstComments.Select(text => text.InnerText);
 
                         // Do Translation
-                        var batches = SplitList(batch, 99, 9000);
+                        var batchesComments = SplitList(batch, TranslationServiceFacade.Maxelements, TranslationServiceFacade.Maxrequestsize);
 
                         // Use ConcurrentQueue to enable safe enqueueing from multiple threads. 
                         var exceptions = new ConcurrentQueue<Exception>();
 
                         Parallel.For(
                             0,
-                            batches.Count(),
+                            batchesComments.Count(),
                             new ParallelOptions { MaxDegreeOfParallelism = 1 },
                             l =>
                             {
                                 try
                                 {
-                                    var translationOutput = TranslationServiceFacade.TranslateArray(batches[l].ToArray(), sourceLanguage, targetLanguage);
+                                    var translationOutput =
+                                        TranslationServiceFacade.TranslateArray(
+                                            batchesComments[l].ToArray(),
+                                            sourceLanguage,
+                                            targetLanguage);
                                     int batchStartIndexInDocument = 0;
                                     for (int i = 0; i < l; i++)
                                     {
                                         batchStartIndexInDocument = batchStartIndexInDocument
-                                                                    + batches[i].Count();
+                                                                    + batchesComments[i].Count();
                                     }
 
                                     // Apply translated batch to document
@@ -662,7 +646,11 @@ namespace TranslationAssistant.Business
                                     {
                                         int indexInDocument = j + batchStartIndexInDocument + 1;
                                         var newValue = translationOutput[j];
-                                        texts.Take(indexInDocument).Last().Text = newValue;
+                                        var commentPart = lstComments.Take(indexInDocument).Last();
+                                        commentPart.Text = new DocumentFormat.OpenXml.Presentation.Text
+                                        {
+                                            Text = newValue
+                                        };
                                     }
                                 }
                                 catch (Exception ex)
@@ -677,87 +665,175 @@ namespace TranslationAssistant.Business
                             throw new AggregateException(exceptions);
                         }
                     }
-
-                    if (lstComments.Count() > 0)
-                    {
-                        // Extract Text for Translation
-                        var batch = lstComments.Select(text => text.InnerText);
-
-                        // Do Translation
-                        var batchesComments = SplitList(batch, 99, 9000);
-
-                        // Use ConcurrentQueue to enable safe enqueueing from multiple threads. 
-                        var exceptions = new ConcurrentQueue<Exception>();
-
-                        Parallel.For(
-                            0,
-                            batchesComments.Count(),
-                            new ParallelOptions { MaxDegreeOfParallelism = 1 },
-                            l =>
-                                {
-                                    try
-                                    {
-                                        var translationOutput =
-                                            TranslationServiceFacade.TranslateArray(
-                                                batchesComments[l].ToArray(),
-                                                sourceLanguage,
-                                                targetLanguage);
-                                        int batchStartIndexInDocument = 0;
-                                        for (int i = 0; i < l; i++)
-                                        {
-                                            batchStartIndexInDocument = batchStartIndexInDocument
-                                                                        + batchesComments[i].Count();
-                                        }
-
-                                        // Apply translated batch to document
-                                        for (int j = 0; j < translationOutput.Length; j++)
-                                        {
-                                            int indexInDocument = j + batchStartIndexInDocument + 1;
-                                            var newValue = translationOutput[j];
-                                            var commentPart = lstComments.Take(indexInDocument).Last();
-                                            commentPart.Text = new DocumentFormat.OpenXml.Presentation.Text
-                                                                   {
-                                                                       Text =
-                                                                           newValue
-                                                                   };
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        exceptions.Enqueue(ex);
-                                    }
-                                });
-
-                        // Throw the exceptions here after the loop completes. 
-                        if (exceptions.Count > 0)
-                        {
-                            throw new AggregateException(exceptions);
-                        }
-                    }
                 }
 
                 //doc.PresentationPart.PutXDocument();
             }
         }
 
+        private static void ReplaceTextsWithTranslation(List<DocumentFormat.OpenXml.Drawing.Text> texts, string sourceLanguage, string targetLanguage)
+        {
+            if (texts.Count() > 0)
+            {
+                // Extract Text for Translation
+                var batch = texts.Select(text => text.Text);
+
+                // Do Translation
+                var batches = SplitList(batch, TranslationServiceFacade.Maxelements, TranslationServiceFacade.Maxrequestsize);
+
+                // Use ConcurrentQueue to enable safe enqueueing from multiple threads. 
+                var exceptions = new ConcurrentQueue<Exception>();
+
+                Parallel.For(
+                    0,
+                    batches.Count(),
+                    new ParallelOptions { MaxDegreeOfParallelism = 1 },
+                    l =>
+                    {
+                        try
+                        {
+                            var translationOutput = TranslationServiceFacade.TranslateArray(batches[l].ToArray(), sourceLanguage, targetLanguage);
+                            int batchStartIndexInDocument = 0;
+                            for (int i = 0; i < l; i++)
+                            {
+                                batchStartIndexInDocument = batchStartIndexInDocument
+                                                            + batches[i].Count();
+                            }
+
+                            // Apply translated batch to document
+                            for (int j = 0; j < translationOutput.Length; j++)
+                            {
+                                int indexInDocument = j + batchStartIndexInDocument + 1;
+                                var newValue = translationOutput[j];
+                                texts.Take(indexInDocument).Last().Text = newValue;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            exceptions.Enqueue(ex);
+                        }
+                    });
+
+                // Throw the exceptions here after the loop completes. 
+                if (exceptions.Count > 0)
+                {
+                    throw new AggregateException(exceptions);
+                }
+            }
+        }
+
+        private static void ExtractTextContent(List<DocumentFormat.OpenXml.Drawing.Text> textList, DocumentFormat.OpenXml.OpenXmlElement element)
+        {
+            foreach (DocumentFormat.OpenXml.Drawing.Paragraph para in element.Descendants<DocumentFormat.OpenXml.Drawing.Paragraph>())
+            {
+                textList.AddRange(para.Elements<DocumentFormat.OpenXml.Drawing.Run>().Where(item => (item != null && item.Text != null && !String.IsNullOrEmpty(item.Text.Text))).Select(item => item.Text));
+            }
+        }
+
         private static void ProcessWordDocument(
             string outputDocumentFullName,
             string sourceLanguage,
-            string targetLanguage)
+            string targetLanguage,
+            bool ignoreHidden = false)
         {
+
+            using (WordprocessingDocument doc = WordprocessingDocument.Open(outputDocumentFullName, true))
+            {
+
+                OpenXmlPowerTools.SimplifyMarkupSettings settings = new OpenXmlPowerTools.SimplifyMarkupSettings
+                {
+                    AcceptRevisions=true,
+                    NormalizeXml = false,         //setting this to false reduces translation quality, but if true some documents have XML format errors when opening
+                    RemoveBookmarks = true,
+                    RemoveComments = true,
+                    RemoveContentControls = true,
+                    RemoveEndAndFootNotes = false,
+                    RemoveFieldCodes = true,
+                    RemoveGoBackBookmark = true,
+                    //RemoveHyperlinks = false,
+                    RemoveLastRenderedPageBreak = true,
+                    RemoveMarkupForDocumentComparison = true,
+                    RemovePermissions = false,
+                    RemoveProof = true,
+                    RemoveRsidInfo = true,
+                    RemoveSmartTags = false,         //setting this to false reduces translation quality, but if true some documents have XML format errors when opening
+                    RemoveSoftHyphens = true,
+                    RemoveWebHidden = true,
+                    ReplaceTabsWithSpaces = false
+                };
+                OpenXmlPowerTools.MarkupSimplifier.SimplifyMarkup(doc, settings);
+            }
 
             List<DocumentFormat.OpenXml.Wordprocessing.Text> texts = new List<DocumentFormat.OpenXml.Wordprocessing.Text>();
             using (WordprocessingDocument doc = WordprocessingDocument.Open(outputDocumentFullName, true))
             {
                 var body = doc.MainDocumentPart.Document.Body;
-                texts.AddRange(body.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>().Where(text => !String.IsNullOrEmpty(text.Text) && text.Text.Length > 1));
+                texts.AddRange(body.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>()
+                    .Where(text => !String.IsNullOrEmpty(text.Text) && text.Text.Length > 0));
+
+#if DEBUG
+                //--------DEBUG PROCESSING -------------
+                if (false)
+                {
+                    using (StreamWriter debugoutput = new StreamWriter(outputDocumentFullName + ".debug.txt"))
+                    {
+                        foreach (var text in texts)
+                        {
+                            debugoutput.WriteLine(text.Text);
+                        }
+                        debugoutput.Flush();
+                        debugoutput.Close();
+                    }
+                }
+                //--------END DEBUG --------------------
+#endif
+
+                var headers = doc.MainDocumentPart.HeaderParts.Select(p => p.Header);
+                foreach (var header in headers)
+                {
+                    texts.AddRange(header.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>().Where(text => !string.IsNullOrEmpty(text.Text) && text.Text.Length > 0));
+                }
+
+                var footers = doc.MainDocumentPart.FooterParts.Select(p => p.Footer);
+                foreach (var footer in footers)
+                {
+                    texts.AddRange(footer.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>().Where(text => !string.IsNullOrEmpty(text.Text) && text.Text.Length > 0));
+                }
+
+                FootnotesPart footnotesPart = doc.MainDocumentPart.FootnotesPart;
+                if (footnotesPart != null)
+                {
+                    var footnotes = footnotesPart.Footnotes.Elements<Footnote>();
+                    foreach (var footnote in footnotes)
+                    {
+                        texts.AddRange(footnote.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>().Where(text => !string.IsNullOrEmpty(text.Text) && text.Text.Length > 0));
+                    }
+                }
+
+                EndnotesPart endnotesPart = doc.MainDocumentPart.EndnotesPart;
+                if (endnotesPart != null)
+                {
+                    var endnotes = endnotesPart.Endnotes.Elements<DocumentFormat.OpenXml.Wordprocessing.Endnote>();
+                    foreach (var endnote in endnotes)
+                    {
+                        texts.AddRange(endnote.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>().Where(text => !string.IsNullOrEmpty(text.Text) && text.Text.Length > 0));
+                    }
+                }
+
+
+
+                if (ignoreHidden)
+                {
+                    texts.RemoveAll(t => t.Parent.Descendants<Vanish>().Any());
+                }
+
                 var exceptions = new ConcurrentQueue<Exception>();
 
                 // Extract Text for Translation
                 var batch = texts.Select(text => text.Text);
 
                 // Do Translation
-                var batches = SplitList(batch, 99, 9000);
+                var batches = SplitList(batch, TranslationServiceFacade.Maxelements, TranslationServiceFacade.Maxrequestsize);
                 Parallel.For(
                     0,
                     batches.Count(),
@@ -795,10 +871,14 @@ namespace TranslationAssistant.Business
                 {
                     throw new AggregateException(exceptions);
                 }
+                doc.MainDocumentPart.Document.Save();
+                doc.Close();
 
                 //doc.MainDocumentPart.PutXDocument();
             }
         }
+
+
 
         /// <summary>
         /// Splits the list.
@@ -838,6 +918,7 @@ namespace TranslationAssistant.Business
                             .Length;
                     if (aggregatedSize >= maxSize)
                     {
+                        if (elementCount == 1) break;
                         elementCount = elementCount - 1;
                     }
                     else
